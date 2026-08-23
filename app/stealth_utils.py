@@ -28,12 +28,39 @@ VIEWPORTS = [
     {"width": 1366, "height": 768},
 ]
 
+MOBILE_USER_AGENTS = [
+    "Mozilla/5.0 (Linux; Android 14; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+]
+
+MOBILE_VIEWPORTS = [
+    {"width": 390, "height": 844},   # iPhone 12/13/14-class
+    {"width": 412, "height": 915},   # common Android
+    {"width": 360, "height": 800},
+]
+
 LOCALES = ["en-US", "en-GB", "en-IN"]
 TIMEZONES = ["America/New_York", "Europe/London", "Asia/Kolkata"]
 
 
-def random_context_options() -> dict:
-    """Return a randomized set of new_context() kwargs for Playwright."""
+def random_context_options(device_type: str = "desktop") -> dict:
+    """
+    Return a randomized set of new_context() kwargs for Playwright.
+    device_type: "desktop" (default) or "mobile" -- mobile emulation often
+    loads faster on sites that serve a lighter responsive layout, and
+    tends to produce simpler, more readable output HTML.
+    """
+    if device_type == "mobile":
+        return {
+            "user_agent": random.choice(MOBILE_USER_AGENTS),
+            "viewport": random.choice(MOBILE_VIEWPORTS),
+            "locale": random.choice(LOCALES),
+            "timezone_id": random.choice(TIMEZONES),
+            "device_scale_factor": 2,
+            "is_mobile": True,
+            "has_touch": True,
+        }
     return {
         "user_agent": random.choice(USER_AGENTS),
         "viewport": random.choice(VIEWPORTS),
