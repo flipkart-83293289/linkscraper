@@ -59,6 +59,7 @@ app.add_middleware(
 
 class GenerateRequest(BaseModel):
     url: HttpUrl
+    device: str = "desktop"  # "desktop" or "mobile"
 
     @field_validator("url")
     @classmethod
@@ -69,6 +70,13 @@ class GenerateRequest(BaseModel):
         blocked_prefixes = ("localhost", "127.", "10.", "192.168.", "169.254.", "0.")
         if host.startswith(blocked_prefixes) or host.endswith(".local"):
             raise ValueError("Target host is not allowed.")
+        return v
+
+    @field_validator("device")
+    @classmethod
+    def validate_device(cls, v: str) -> str:
+        if v not in ("desktop", "mobile"):
+            raise ValueError('device must be "desktop" or "mobile"')
         return v
 
 
@@ -98,7 +106,7 @@ async def generate(req: GenerateRequest):
     async with JOB_SEMAPHORE:
         try:
             html = await asyncio.wait_for(
-                scrape_and_inline(url_str),
+                scrape_and_inline(url_str, device_type=req.device),
                 timeout=settings.JOB_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
@@ -138,6 +146,7 @@ async def view_source(job_id: str):
 
 class MetadataRequest(BaseModel):
     url: HttpUrl
+    device: str = "desktop"
 
     @field_validator("url")
     @classmethod
@@ -146,6 +155,13 @@ class MetadataRequest(BaseModel):
         blocked_prefixes = ("localhost", "127.", "10.", "192.168.", "169.254.", "0.")
         if host.startswith(blocked_prefixes) or host.endswith(".local"):
             raise ValueError("Target host is not allowed.")
+        return v
+
+    @field_validator("device")
+    @classmethod
+    def validate_device(cls, v: str) -> str:
+        if v not in ("desktop", "mobile"):
+            raise ValueError('device must be "desktop" or "mobile"')
         return v
 
 
@@ -168,7 +184,7 @@ async def extract_metadata_endpoint(req: MetadataRequest):
     async with JOB_SEMAPHORE:
         try:
             metadata = await asyncio.wait_for(
-                scrape_and_extract_metadata(url_str),
+                scrape_and_extract_metadata(url_str, device_type=req.device),
                 timeout=settings.JOB_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
