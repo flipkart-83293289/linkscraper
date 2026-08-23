@@ -47,11 +47,20 @@ def random_context_options() -> dict:
 
 async def apply_stealth_patches(page) -> None:
     """
-    Inject the common navigator/plugin/webdriver patches that
-    playwright-stealth also applies, as an init script so it runs before
-    any page JS. If the `playwright_stealth` package is installed and
-    importable, prefer that (it's more comprehensive and maintained);
-    this function is the fallback/supplement.
+    Inject the common navigator/plugin/webdriver patches manually via an
+    init script, so it runs before any page JS.
+
+    NOTE: we deliberately do NOT depend on the third-party
+    `playwright-stealth` package here. Its public API has changed
+    incompatibly between major versions (1.x exposed `stealth_async(page)`;
+    2.x replaced it with a `Stealth().use_async(playwright)` context
+    manager that wraps the Playwright driver, not the page) and pinning a
+    version doesn't fully protect you from build-time resolution
+    surprises. Calling the wrong-generation API silently produces
+    "'NoneType' object is not callable" style crashes instead of a clean
+    ImportError. The manual patches below cover the same well-known
+    fingerprint tells (navigator.webdriver, plugins, permissions.query)
+    without that fragility.
     """
     stealth_js = """
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -66,14 +75,6 @@ async def apply_stealth_patches(page) -> None:
     );
     """
     await page.add_init_script(stealth_js)
-
-    try:
-        from playwright_stealth import stealth_async
-        await stealth_async(page)
-    except ImportError:
-        # playwright-stealth not installed / not applicable to this
-        # Playwright version -- the manual init script above still applies.
-        pass
 
 
 def human_delay_ms() -> int:
