@@ -59,7 +59,7 @@ app.add_middleware(
 
 class GenerateRequest(BaseModel):
     url: HttpUrl
-    device: str = "desktop"  # "desktop" or "mobile"
+    device: str = settings.DEVICE_TYPE  # "desktop" or "mobile"
 
     @field_validator("url")
     @classmethod
@@ -146,7 +146,7 @@ async def view_source(job_id: str):
 
 class MetadataRequest(BaseModel):
     url: HttpUrl
-    device: str = "desktop"
+    device: str = settings.DEVICE_TYPE
 
     @field_validator("url")
     @classmethod
