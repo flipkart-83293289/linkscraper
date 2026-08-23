@@ -96,7 +96,7 @@ async def _render_page(url: str, block_images: bool = True, device_type: str = "
     context = None
     try:
         browser = await p.chromium.launch(headless=True, args=CHROMIUM_LAUNCH_ARGS)
-        context = await browser.new_context(**random_context_options(device_type))
+        context = await browser.new_context(**random_context_options(device_type, playwright=p))
 
         blocked_types = {"media", "image", "font"} if block_images else {"media"}
 
@@ -157,7 +157,7 @@ async def scrape_and_inline(url: str, device_type: str = "desktop") -> str:
         await p.stop()
 
 
-async def _try_lightweight_fetch(url: str) -> str | None:
+async def _try_lightweight_fetch(url: str, device_type: str = "desktop") -> str | None:
     """
     Tier 1 for metadata extraction: a plain HTTP GET through Playwright's
     standalone API-request client -- NO browser process is launched at
@@ -171,9 +171,10 @@ async def _try_lightweight_fetch(url: str) -> str | None:
     p = await async_playwright().start()
     request_context = None
     try:
+        options = random_context_options(device_type, playwright=p)
         request_context = await p.request.new_context(
             extra_http_headers={
-                "User-Agent": random_context_options()["user_agent"],
+                "User-Agent": options["user_agent"],
                 "Accept-Language": "en-US,en;q=0.9",
             }
         )
@@ -205,7 +206,7 @@ async def scrape_and_extract_metadata(url: str, device_type: str = "desktop") ->
     """
     from app.metadata_extractor import extract_metadata
 
-    raw_html = await _try_lightweight_fetch(url)
+    raw_html = await _try_lightweight_fetch(url, device_type=device_type)
     if raw_html:
         try:
             metadata = extract_metadata(raw_html, url)
