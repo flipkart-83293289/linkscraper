@@ -1,6 +1,5 @@
 import os
 
-
 class Settings:
     # Comma-separated list in env, e.g. "https://myfrontend.onrender.com,http://localhost:5173"
     CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "*").split(",")
