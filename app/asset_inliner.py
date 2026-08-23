@@ -4,10 +4,11 @@ Asset Inlining Engine.
 Takes a rendered DOM snapshot (already-evaluated HTML string) plus the
 page's base URL, then:
   1. Downloads every linked stylesheet and inlines it into <style> blocks.
-  2. Downloads every external <script src> and inlines it into <script>
-     blocks (skipping ones that fail, e.g. blocked by CORS-adjacent CDN
-     rules -- a failed script inline degrades gracefully rather than
-     crashing the whole job).
+  2. Strips ALL <script> tags and inline JS event-handler attributes
+     (onclick, onload, etc.) -- see the detailed rationale further down.
+     The DOM we captured is already Playwright's post-JS-execution
+     snapshot, so re-running JS offline adds nothing visually and mainly
+     causes problems (dead API calls, anti-bot scripts misbehaving).
   3. Converts <img src>, <img srcset>, CSS background-image url(...), and
      <link rel="icon"> targets into base64 data: URIs.
   4. Rewrites any remaining relative URLs (href/src on <a>, <form>, etc.)
