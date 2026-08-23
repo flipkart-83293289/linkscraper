@@ -36,7 +36,7 @@ from app.config import settings
 
 logger = logging.getLogger("asset-inliner")
 
-ASSET_FETCH_CONCURRENCY = 4
+ASSET_FETCH_CONCURRENCY = 8
 _fetch_semaphore = asyncio.Semaphore(ASSET_FETCH_CONCURRENCY)
 
 
@@ -51,7 +51,7 @@ async def _fetch_bytes(context, url: str) -> tuple[bytes | None, str | None]:
     """Fetch a resource via the browser context. Returns (bytes, mime) or (None, None) on failure."""
     async with _fetch_semaphore:
         try:
-            resp = await context.request.get(url, timeout=15000)
+            resp = await context.request.get(url, timeout=8000)
             if not resp.ok:
                 logger.warning(f"Asset fetch non-200 ({resp.status}): {url}")
                 return None, None
@@ -202,4 +202,9 @@ async def inline_all_assets(html: str, base_url: str, context) -> str:
         meta.decompose()
 
     provenance = f"<!-- Cloned offline snapshot of {base_url} -->\n"
-    return provenance + str(soup)
+    # Pretty-print for readability -- the user wants to view this like
+    # normal single-page source code, not a single minified line. Note:
+    # prettify() can occasionally add whitespace around inline elements
+    # (e.g. <span>/<a> inside text) that very rarely nudges spacing by a
+    # pixel or two -- an acceptable trade for genuinely readable output.
+    return provenance + soup.prettify()
