@@ -71,7 +71,7 @@ class ScrapeError(Exception):
     pass
 
 
-async def _render_page(url: str, block_images: bool = True):
+async def _render_page(url: str, block_images: bool = True, device_type: str = "desktop"):
     """
     Shared rendering step: launches Chromium, navigates, settles, and
     returns (rendered_html, final_url, context, browser, playwright_cm).
@@ -96,7 +96,7 @@ async def _render_page(url: str, block_images: bool = True):
     context = None
     try:
         browser = await p.chromium.launch(headless=True, args=CHROMIUM_LAUNCH_ARGS)
-        context = await browser.new_context(**random_context_options())
+        context = await browser.new_context(**random_context_options(device_type))
 
         blocked_types = {"media", "image", "font"} if block_images else {"media"}
 
@@ -136,9 +136,9 @@ async def _render_page(url: str, block_images: bool = True):
         raise
 
 
-async def scrape_and_inline(url: str) -> str:
+async def scrape_and_inline(url: str, device_type: str = "desktop") -> str:
     try:
-        rendered_html, final_url, context, browser, p = await _render_page(url)
+        rendered_html, final_url, context, browser, p = await _render_page(url, device_type=device_type)
     except PWTimeoutError as e:
         logger.exception(f"Playwright timeout while cloning {url}")
         raise ScrapeError(f"Timed out loading page: {e}")
@@ -195,7 +195,7 @@ def _metadata_looks_sufficient(metadata: dict) -> bool:
     return bool(metadata.get("title")) and bool(metadata.get("price") or metadata.get("images"))
 
 
-async def scrape_and_extract_metadata(url: str) -> dict:
+async def scrape_and_extract_metadata(url: str, device_type: str = "desktop") -> dict:
     """
     Two-tier metadata extraction:
       Tier 1 (cheap): plain HTTP fetch, no browser -- works when the site
@@ -217,7 +217,7 @@ async def scrape_and_extract_metadata(url: str) -> dict:
 
     # Tier 2 fallback: full browser render, images/fonts blocked for memory.
     try:
-        rendered_html, final_url, context, browser, p = await _render_page(url, block_images=True)
+        rendered_html, final_url, context, browser, p = await _render_page(url, block_images=True, device_type=device_type)
     except PWTimeoutError as e:
         logger.exception(f"Playwright timeout while extracting metadata from {url}")
         raise ScrapeError(f"Timed out loading page: {e}")
