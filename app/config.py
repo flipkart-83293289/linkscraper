@@ -21,12 +21,24 @@ class Settings:
     MAX_ASSETS: int = int(os.getenv("MAX_ASSETS", "150"))
 
     # Navigation wait strategy: "load", "domcontentloaded", or "networkidle".
-    # networkidle is most thorough for SPA/CSR pages but slowest.
-    WAIT_UNTIL: str = os.getenv("WAIT_UNTIL", "networkidle")
+    #
+    # Default changed from "networkidle" to "domcontentloaded": networkidle
+    # waits for network activity to go quiet for 500ms, but heavy sites
+    # with continuous polling/analytics/ads NEVER go fully idle -- so it
+    # burns the full navigation timeout (45s) before falling back anyway.
+    # "domcontentloaded" fires as soon as the DOM is parsed, which combined
+    # with our explicit POST_LOAD_SETTLE_MS wait afterward still gives JS
+    # time to finish painting, just without the long dead wait.
+    WAIT_UNTIL: str = os.getenv("WAIT_UNTIL", "domcontentloaded")
 
     # Extra settle time (ms) after navigation for lazy-loaded content /
     # JS-driven rendering to finish painting.
-    POST_LOAD_SETTLE_MS: int = int(os.getenv("POST_LOAD_SETTLE_MS", "1500"))
+    POST_LOAD_SETTLE_MS: int = int(os.getenv("POST_LOAD_SETTLE_MS", "2000"))
+
+    # Which device profile to emulate: "desktop" or "mobile". Mobile often
+    # renders faster and lighter (simpler layout, fewer heavy widgets) on
+    # sites that serve a distinct responsive mobile experience.
+    DEVICE_TYPE: str = os.getenv("DEVICE_TYPE", "desktop")
 
 
 settings = Settings()
