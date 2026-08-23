@@ -25,7 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, HttpUrl, field_validator
 
-from app.scraper import ScrapeError, scrape_and_inline
+from app.scraper import ScrapeError, scrape_and_inline, scrape_and_extract_metadata
 from app.config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -121,6 +121,65 @@ async def download(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found or already expired.")
     return HTMLResponse(content=job["html"], media_type="text/html")
+
+
+@app.get("/api/view-source/{job_id}")
+async def view_source(job_id: str):
+    """
+    Returns the generated HTML as plain text instead of rendering it --
+    open this URL directly to see the raw single-file HTML/CSS/JS code
+    (as opposed to /api/download, which renders it as a live page).
+    """
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or already expired.")
+    return HTMLResponse(content=job["html"], media_type="text/plain")
+
+
+class MetadataRequest(BaseModel):
+    url: HttpUrl
+
+    @field_validator("url")
+    @classmethod
+    def block_private_hosts(cls, v: HttpUrl) -> HttpUrl:
+        host = v.host or ""
+        blocked_prefixes = ("localhost", "127.", "10.", "192.168.", "169.254.", "0.")
+        if host.startswith(blocked_prefixes) or host.endswith(".local"):
+            raise ValueError("Target host is not allowed.")
+        return v
+
+
+@app.post("/api/extract-metadata")
+async def extract_metadata_endpoint(req: MetadataRequest):
+    """
+    Lightweight alternative to /api/generate: returns structured fields
+    (title, price, currency, images, description, rating, availability)
+    instead of a full offline HTML clone. Skips the asset-inlining pass
+    entirely, so it's faster and uses less memory -- but it can only
+    report what actually reached the page; if a site's bot-protection
+    served a CAPTCHA/interstitial instead of the real page, the extracted
+    fields will reflect that page, not the product.
+    """
+    url_str = str(req.url)
+
+    if JOB_SEMAPHORE.locked():
+        raise HTTPException(status_code=429, detail="Server busy processing another page. Try again shortly.")
+
+    async with JOB_SEMAPHORE:
+        try:
+            metadata = await asyncio.wait_for(
+                scrape_and_extract_metadata(url_str),
+                timeout=settings.JOB_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Page took too long to render.")
+        except ScrapeError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except Exception as e:
+            logger.exception("Unexpected failure during metadata extraction")
+            raise HTTPException(status_code=500, detail=f"Internal error: {e}")
+
+    return metadata
 
 
 @app.exception_handler(Exception)
