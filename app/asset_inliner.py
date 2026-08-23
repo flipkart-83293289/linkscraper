@@ -131,22 +131,32 @@ async def inline_all_assets(html: str, base_url: str, context) -> str:
     for tag in soup.find_all(style=True):
         tag["style"] = await _inline_css_urls(context, tag["style"], base_url, asset_budget)
 
-    # --- 4. Inline external <script src="..."> ---
-    for script in soup.find_all("script", src=True):
-        if asset_budget[0] <= 0:
-            break
-        src = script.get("src")
-        absolute = urljoin(base_url, src)
-        data, _ = await _fetch_bytes(context, absolute)
-        asset_budget[0] -= 1
-        if data is None:
-            # Leave a comment rather than a dangling src that will 404 offline.
-            script.replace_with(soup.new_comment(f" external script skipped: {absolute} "))
-            continue
-        new_script = soup.new_tag("script")
-        new_script.string = data.decode("utf-8", errors="ignore")
-        del new_script["src"]
-        script.replace_with(new_script)
+    # --- 4. Strip ALL <script> tags (external + inline) ---
+    #
+    # We deliberately do NOT re-inline JS. The HTML we captured is
+    # Playwright's post-render DOM snapshot -- React/JS already did its
+    # job building the visible page, so the *visual* clone doesn't need
+    # JS to run again. Keeping scripts around only causes problems for a
+    # static offline file:
+    #   - Anti-bot / analytics scripts try to phone home to live APIs,
+    #     fail (no backend), and sometimes blank/redirect the page or
+    #     throw a "please enable JS" / CAPTCHA overlay.
+    #   - App bundles (React etc.) can be 1-5MB+ each; fetching and
+    #     inlining them adds real time and memory for zero visual benefit
+    #     once the DOM is already baked in.
+    # Net effect: faster generation, smaller/more reliable output, and
+    # scripts that could otherwise interfere with viewing the page
+    # offline are gone.
+    for script in soup.find_all("script"):
+        script.decompose()
+
+    # Also strip inline JS event-handler attributes (onclick, onload,
+    # onerror, etc.) for the same reason -- they're dead weight (no JS
+    # context to run them anyway) and one less thing that can misbehave.
+    EVENT_ATTR_RE = re.compile(r"^on[a-z]+$", re.I)
+    for tag in soup.find_all(True):
+        for attr in [a for a in tag.attrs if EVENT_ATTR_RE.match(a)]:
+            del tag[attr]
 
     # --- 5. Inline <img src> and srcset ---
     for img in soup.find_all("img"):
